@@ -1,0 +1,91 @@
+# --- Source report details (Report that is not downloadable) ---
+$SourceWorkspaceId = "XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX"
+$SourceReportId    = "XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX"
+
+# --- Target workspace and report (Report you download and replace with the visuals from the Source) ---
+$TargetWorkspaceId = "XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX"
+$TargetReportId    = "XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX"
+
+# --- Fixed export location ---
+$OutFile = "C:\Power BI Backups\CloneReport.pbix"
+
+# Ensure export directory exists
+$exportDir = Split-Path $OutFile
+if (-not (Test-Path $exportDir)) {
+    Write-Host "Creating export directory: $exportDir"
+    New-Item -Path $exportDir -ItemType Directory | Out-Null
+}
+
+# ========================================================
+# TOKEN MANAGEMENT
+# ========================================================
+
+function Connect-PowerBI {
+    Write-Host "🔑 Connecting to Power BI..."
+    Connect-PowerBIServiceAccount | Out-Null
+    $global:accessTokenObject = Get-PowerBIAccessToken
+    $global:accessToken = $accessTokenObject.Authorization -replace 'Bearer ', ''
+    Set-Content -Path "$env:TEMP\PowerBI_AccessToken.txt" -Value $global:accessToken
+    Write-Host "✅ Power BI access token acquired and stored."
+}
+
+function Start-TokenRefreshJob {
+    if (Get-Job -Name "TokenRefreshJob" -ErrorAction SilentlyContinue) { return }
+    Write-Host "Starting background token refresh job..."
+    $jobScript = {
+        Import-Module MicrosoftPowerBIMgmt.Profile
+        function Connect-PowerBI {
+            Connect-PowerBIServiceAccount | Out-Null
+            $global:accessTokenObject = Get-PowerBIAccessToken
+            $global:accessToken = $accessTokenObject.Authorization -replace 'Bearer ', ''
+            Set-Content -Path "$env:TEMP\PowerBI_AccessToken.txt" -Value $global:accessToken
+        }
+        while ($true) {
+            Start-Sleep -Seconds 3300  # 55 minutes
+            Connect-PowerBI
+        }
+    }
+    Start-Job -ScriptBlock $jobScript -Name "TokenRefreshJob" | Out-Null
+}
+
+function Get-CurrentAccessToken {
+    return (Get-Content -Path "$env:TEMP\PowerBI_AccessToken.txt" -ErrorAction SilentlyContinue)
+}
+
+# Initialize
+Connect-PowerBI
+Start-TokenRefreshJob
+
+# ========================================================
+# MAIN SCRIPT
+# ========================================================
+
+$pbiApiBaseUri = "https://api.powerbi.com/v1.0/myorg"
+
+# Prepare headers
+$accessToken = Get-CurrentAccessToken
+$headers = @{
+    "Content-Type"  = "application/json"
+    "Authorization" = "Bearer $accessToken"
+}
+
+# --- Step 1: Copy content from source → target
+$updateEndpoint = "$pbiApiBaseUri/groups/$TargetWorkspaceId/reports/$TargetReportId/UpdateReportContent"
+$body = @"
+{
+  "sourceReport": {
+    "sourceReportId": "$SourceReportId",
+    "sourceWorkspaceId": "$SourceWorkspaceId"
+  },
+  "sourceType": "ExistingReport"
+}
+"@
+
+Write-Host "Copying report content from Source ($SourceReportId) to Target ($TargetReportId)..."
+Invoke-RestMethod -Uri $updateEndpoint -Method POST -Headers $headers -Body $body -ContentType "application/json"
+Write-Host "Report content successfully updated."
+
+# --- Step 2: Export target report
+Write-Host "Exporting target report PBIX to $OutFile..."
+Export-PowerBIReport -WorkspaceId $TargetWorkspaceId -Id $TargetReportId -OutFile $OutFile
+Write-Host "Done! Exported to: $OutFile"
