@@ -3,7 +3,7 @@
 $SourceWorkspaceId = "XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXX"
 $SourceReportId    = "XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXX"
 
-# --- Target workspace and report (Report you download and replace with the visuals from the Source) ---
+# --- Target workspace and report (Report that IS downloadable and you want to replace with the visuals from the non-downloadable report) ---
 
 $TargetWorkspaceId = $SourceWorkspaceId 
 #----Change if the report you're updating is in a different workspace---
