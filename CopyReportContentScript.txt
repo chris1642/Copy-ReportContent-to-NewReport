@@ -3,14 +3,14 @@
 $SourceWorkspaceId = "XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXX"
 $SourceReportId    = "XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXX"
 
-# --- Target workspace and report (Report that IS downloadable and you want to replace with the visuals from the non-downloadable report) ---
-
-$TargetWorkspaceId = $SourceWorkspaceId 
-#----Change if the report you're updating is in a different workspace---
-
+# --- Target report (Report that IS downloadable and you want to replace with the visuals from the non-downloadable report) ---
 $TargetReportId    = "XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXX"
 
-# --- Fixed export base path ---
+
+#----Change below if the report you're updating is in a different workspace----
+$TargetWorkspaceId = $SourceWorkspaceId 
+
+# --- Fixed export base path - this just will autodownload a copy of your new report at the end - it will still be available in the service as well ---
 $exportBasePath = "C:\Power BI Backups"
 
 # Ensure required modules are installed, and imports them. If import fails, error and exit early
