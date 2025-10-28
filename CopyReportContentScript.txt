@@ -1,19 +1,26 @@
-# --- Source report details (Report that is not downloadable) ---
-$SourceWorkspaceId = "XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX"
-$SourceReportId    = "XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX"
+# --- Source report details (Report that is NOT downloadable) ---
+
+$SourceWorkspaceId = "XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXX"
+$SourceReportId    = "XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXX"
 
 # --- Target workspace and report (Report you download and replace with the visuals from the Source) ---
-$TargetWorkspaceId = "XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX"
-$TargetReportId    = "XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX"
 
-# --- Fixed export location ---
-$OutFile = "C:\Power BI Backups\CloneReport.pbix"
+$TargetWorkspaceId = $SourceWorkspaceId 
+#----Change if the report you're updating is in a different workspace---
 
-# Ensure export directory exists
-$exportDir = Split-Path $OutFile
-if (-not (Test-Path $exportDir)) {
-    Write-Host "Creating export directory: $exportDir"
-    New-Item -Path $exportDir -ItemType Directory | Out-Null
+$TargetReportId    = "XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXX"
+
+# --- Fixed export base path ---
+$exportBasePath = "C:\Power BI Backups"
+
+# Ensure required modules are installed, and imports them. If import fails, error and exit early
+$requiredModules = @('MicrosoftPowerBIMgmt' )
+foreach ($module in $requiredModules) {
+    if( -not (Import-Module $module -PassThru -EA ignore) ) {
+       Install-Module -Name $module -Scope CurrentUser -Force
+    }
+
+    Import-Module $Module -ErrorAction 'stop' # In the rare case Install-Module fails, you probably want a terminating error
 }
 
 # ========================================================
@@ -21,12 +28,12 @@ if (-not (Test-Path $exportDir)) {
 # ========================================================
 
 function Connect-PowerBI {
-    Write-Host "🔑 Connecting to Power BI..."
+    Write-Host "Connecting to Power BI..."
     Connect-PowerBIServiceAccount | Out-Null
     $global:accessTokenObject = Get-PowerBIAccessToken
     $global:accessToken = $accessTokenObject.Authorization -replace 'Bearer ', ''
     Set-Content -Path "$env:TEMP\PowerBI_AccessToken.txt" -Value $global:accessToken
-    Write-Host "✅ Power BI access token acquired and stored."
+    Write-Host "Power BI access token acquired and stored."
 }
 
 function Start-TokenRefreshJob {
@@ -52,7 +59,7 @@ function Get-CurrentAccessToken {
     return (Get-Content -Path "$env:TEMP\PowerBI_AccessToken.txt" -ErrorAction SilentlyContinue)
 }
 
-# Initialize
+# Initialize connection and background refresh
 Connect-PowerBI
 Start-TokenRefreshJob
 
@@ -69,7 +76,22 @@ $headers = @{
     "Authorization" = "Bearer $accessToken"
 }
 
-# --- Step 1: Copy content from source → target
+# --- Step 0: Retrieve source report name ---
+Write-Host "Retrieving source report name..."
+$sourceReportDetails = Invoke-RestMethod -Uri "$pbiApiBaseUri/groups/$SourceWorkspaceId/reports/$SourceReportId" -Headers $headers -Method GET
+$sourceReportName = $sourceReportDetails.name
+$cleanName = ($sourceReportName -replace '[\\/:*?"<>|]', '') + " - Downloadable.pbix"
+
+# Construct export path
+$OutFile = Join-Path $exportBasePath $cleanName
+
+# Ensure export directory exists
+if (-not (Test-Path $exportBasePath)) {
+    Write-Host "Creating export directory: $exportBasePath"
+    New-Item -Path $exportBasePath -ItemType Directory | Out-Null
+}
+
+# --- Step 1: Copy content from source → targetthe 
 $updateEndpoint = "$pbiApiBaseUri/groups/$TargetWorkspaceId/reports/$TargetReportId/UpdateReportContent"
 $body = @"
 {
@@ -85,7 +107,23 @@ Write-Host "Copying report content from Source ($SourceReportId) to Target ($Tar
 Invoke-RestMethod -Uri $updateEndpoint -Method POST -Headers $headers -Body $body -ContentType "application/json"
 Write-Host "Report content successfully updated."
 
-# --- Step 2: Export target report
+# --- Step 2: Export target report safely ---
+if (Test-Path $OutFile) {
+    Write-Host "Existing export found at $OutFile — deleting old file..."
+    Remove-Item -Path $OutFile -Force
+}
+
 Write-Host "Exporting target report PBIX to $OutFile..."
 Export-PowerBIReport -WorkspaceId $TargetWorkspaceId -Id $TargetReportId -OutFile $OutFile
 Write-Host "Done! Exported to: $OutFile"
+
+# ========================================================
+# CLEANUP
+# ========================================================
+# Stop the background job after script completion
+
+Stop-Job -Name "TokenRefreshJob"
+Remove-Job -Name "TokenRefreshJob"
+
+Write-Host "Script completed successfully."
+ 
