@@ -1,14 +1,14 @@
-# --- Source report details (Report that is NOT downloadable) ---
+# --- Report that is NOT downloadable details ---
 
-$SourceWorkspaceId = "XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXX"
-$SourceReportId    = "XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXX"
+$NonDownloadableReportWorkspaceID = "XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXX"
+$NonDownloadableReportID    = "XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXX"
 
-# --- Target report (Report that IS downloadable and you want to replace with the visuals from the non-downloadable report) ---
-$TargetReportId    = "XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXX"
+# --- Report details for report that IS downloadable and you want to replace with the visuals from the non-downloadable report ---
+$BlankReportID    = "XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXX"
 
 
 #----Change below if the report you're updating is in a different workspace----
-$TargetWorkspaceId = $SourceWorkspaceId 
+$BlankReportWorkspaceID = $NonDownloadableReportWorkspaceID 
 
 # --- Fixed export base path - this just will autodownload a copy of your new report at the end - it will still be available in the service as well ---
 $exportBasePath = "C:\Power BI Backups"
@@ -78,7 +78,7 @@ $headers = @{
 
 # --- Step 0: Retrieve source report name ---
 Write-Host "Retrieving source report name..."
-$sourceReportDetails = Invoke-RestMethod -Uri "$pbiApiBaseUri/groups/$SourceWorkspaceId/reports/$SourceReportId" -Headers $headers -Method GET
+$sourceReportDetails = Invoke-RestMethod -Uri "$pbiApiBaseUri/groups/$NonDownloadableReportWorkspaceID/reports/$NonDownloadableReportID" -Headers $headers -Method GET
 $sourceReportName = $sourceReportDetails.name
 $cleanName = ($sourceReportName -replace '[\\/:*?"<>|]', '') + " - Downloadable.pbix"
 
@@ -92,18 +92,18 @@ if (-not (Test-Path $exportBasePath)) {
 }
 
 # --- Step 1: Copy content from source → targetthe 
-$updateEndpoint = "$pbiApiBaseUri/groups/$TargetWorkspaceId/reports/$TargetReportId/UpdateReportContent"
+$updateEndpoint = "$pbiApiBaseUri/groups/$BlankReportWorkspaceID/reports/$BlankReportID/UpdateReportContent"
 $body = @"
 {
   "sourceReport": {
-    "sourceReportId": "$SourceReportId",
-    "sourceWorkspaceId": "$SourceWorkspaceId"
+    "sourceReportId": "$NonDownloadableReportID",
+    "sourceWorkspaceId": "$NonDownloadableReportWorkspaceID"
   },
   "sourceType": "ExistingReport"
 }
 "@
 
-Write-Host "Copying report content from Source ($SourceReportId) to Target ($TargetReportId)..."
+Write-Host "Copying report content from Source ($NonDownloadableReportID) to Target ($BlankReportID)..."
 Invoke-RestMethod -Uri $updateEndpoint -Method POST -Headers $headers -Body $body -ContentType "application/json"
 Write-Host "Report content successfully updated."
 
@@ -114,7 +114,7 @@ if (Test-Path $OutFile) {
 }
 
 Write-Host "Exporting target report PBIX to $OutFile..."
-Export-PowerBIReport -WorkspaceId $TargetWorkspaceId -Id $TargetReportId -OutFile $OutFile
+Export-PowerBIReport -WorkspaceId $BlankReportWorkspaceID -Id $BlankReportID -OutFile $OutFile
 Write-Host "Done! Exported to: $OutFile"
 
 # ========================================================
