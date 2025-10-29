@@ -1,6 +1,6 @@
 # Copy & Export Non-Downloadable Power BI Reports
 
-This PowerShell script lets you **clone the visuals and layout** from a *non-downloadable* Power BI report into a *newly published blank report* that is downloadable.  
+This PowerShell script lets you **clone the visuals and layout (bookmarks, report level measures, canvas size, etc)** from a *non-downloadable* Power BI report into a *newly published blank report* that is downloadable.  
 
 After copying, it also **exports** the new report as a `.pbix` file.
 
